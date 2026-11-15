@@ -1,0 +1,5 @@
+target/
+*-numbers.png
+*-legend.png
+*-preview.png
+.idea/
