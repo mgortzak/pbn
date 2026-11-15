@@ -36,20 +36,37 @@ class MainTest {
 
     @Test
     void tooManyArgumentsPrintTheUsageAndFail() {
-        assertEquals(1, run("a.png", "12", "extra"));
+        assertEquals(1, run("a.png", "12", "high", "extra"));
         assertEquals(Main.USAGE + "\n", err.toString(StandardCharsets.UTF_8));
     }
 
     @Test
     void aColorCountThatIsNotANumberFails() {
         assertEquals(1, run("a.png", "many"));
-        assertEquals("colors must be a whole number from 2 to 30, but was: many\n", err.toString(StandardCharsets.UTF_8));
+        assertEquals("colors must be a whole number from 2 to 50, but was: many\n", err.toString(StandardCharsets.UTF_8));
     }
 
     @Test
     void aColorCountOutsideTheRangeFails() {
-        assertEquals(1, run("a.png", "40"));
-        assertEquals("colors must be a whole number from 2 to 30, but was: 40\n", err.toString(StandardCharsets.UTF_8));
+        assertEquals(1, run("a.png", "51"));
+        assertEquals("colors must be a whole number from 2 to 50, but was: 51\n", err.toString(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void anUnknownDetailFails() {
+        assertEquals(1, run("a.png", "12", "max"));
+        assertEquals("detail must be low, medium or high, but was: max\n", err.toString(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void highDetailGivesTheLargerWorkingSize() throws IOException {
+        Path photo = folder.resolve("photo.png");
+        ImageIO.write(PaintByNumbersTest.blocks(240, 120, new Random(3)), "png", photo.toFile());
+
+        assertEquals(0, run(photo.toString(), "3", "high"));
+
+        assertEquals(2400, ImageIO.read(folder.resolve("photo-numbers.png").toFile()).getWidth());
+        assertTrue(out.toString(StandardCharsets.UTF_8).contains("3 colors, 3 regions, high detail"));
     }
 
     @Test
@@ -67,11 +84,11 @@ class MainTest {
 
         assertEquals(0, run(photo.toString(), "3"));
 
-        assertEquals(240, ImageIO.read(folder.resolve("photo-numbers.png").toFile()).getWidth());
-        assertEquals(240, ImageIO.read(folder.resolve("photo-preview.png").toFile()).getWidth());
+        assertEquals(1600, ImageIO.read(folder.resolve("photo-numbers.png").toFile()).getWidth());
+        assertEquals(1600, ImageIO.read(folder.resolve("photo-preview.png").toFile()).getWidth());
         assertTrue(Files.size(folder.resolve("photo-legend.png")) > 0);
         String printed = out.toString(StandardCharsets.UTF_8);
-        assertTrue(printed.contains("3 colors, 3 regions"), printed);
+        assertTrue(printed.contains("3 colors, 3 regions, medium detail"), printed);
         assertEquals(3, printed.lines().filter(line -> line.matches("\\s*\\d+ #[0-9A-F]{6}")).count(), printed);
     }
 
@@ -89,7 +106,7 @@ class MainTest {
         assertEquals(0, run(photo.toString(), "8"));
 
         String printed = out.toString(StandardCharsets.UTF_8);
-        assertTrue(printed.contains("2 colors, 2 regions (of the 8 requested"), printed);
+        assertTrue(printed.contains("2 colors, 2 regions, medium detail (of the 8 requested"), printed);
     }
 
     @Test

@@ -85,6 +85,18 @@ class RenderTest {
         assertEquals(swatches.get(19).rgb(), legend.getRGB(last.x(), last.y()) & 0xFFFFFF);
     }
 
+    @Test
+    void fiftySwatchesUseFourColumns() {
+        List<Swatch> swatches = swatches(50);
+
+        BufferedImage legend = Render.legend(swatches);
+
+        assertEquals(2 * Render.PAD + 13 * Render.ROW, legend.getHeight());
+        assertEquals(4 * Render.COLUMN + 2 * Render.PAD, legend.getWidth());
+        Render.Point last = Render.swatchCenter(49, 50);
+        assertEquals(swatches.get(49).rgb(), legend.getRGB(last.x(), last.y()) & 0xFFFFFF);
+    }
+
     private static List<Swatch> swatches(int n) {
         List<Swatch> swatches = new ArrayList<>();
         for (int i = 0; i < n; i++) {

@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.awt.image.BufferedImage;
 import java.util.Random;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -15,20 +16,20 @@ class PaintByNumbersTest {
     void threeNoisyBlocksGiveThreeColorsAndThreeRegions() {
         BufferedImage image = blocks(240, 120, new Random(2));
 
-        PaintByNumbers.Result result = PaintByNumbers.make(image, 3);
+        PaintByNumbers.Result result = PaintByNumbers.make(image, 3, Detail.MEDIUM);
 
         assertEquals(3, result.swatches().size());
         assertEquals(3, result.regions());
-        assertEquals(240, result.numbered().getWidth());
-        assertEquals(120, result.preview().getHeight());
-        assertEquals(240, result.preview().getWidth());
+        assertEquals(1600, result.numbered().getWidth());
+        assertEquals(800, result.preview().getHeight());
+        assertEquals(1600, result.preview().getWidth());
     }
 
     @Test
     void thePaletteNeverHoldsMoreColorsThanRequested() {
         BufferedImage image = noise(200, 150, new Random(9));
 
-        PaintByNumbers.Result result = PaintByNumbers.make(image, 10);
+        PaintByNumbers.Result result = PaintByNumbers.make(image, 10, Detail.MEDIUM);
 
         assertTrue(result.swatches().size() <= 10);
         assertTrue(result.swatches().size() >= 2);
@@ -38,30 +39,44 @@ class PaintByNumbersTest {
     void theSameImageGivesTheSameResult() {
         BufferedImage image = noise(160, 120, new Random(1));
 
-        assertEquals(PaintByNumbers.make(image, 12).swatches(), PaintByNumbers.make(image, 12).swatches());
+        assertEquals(PaintByNumbers.make(image, 12, Detail.HIGH).swatches(), PaintByNumbers.make(image, 12, Detail.HIGH).swatches());
     }
 
     @Test
-    void aLargeImageIsScaledToTheWorkingSize() {
-        BufferedImage image = new BufferedImage(3200, 400, BufferedImage.TYPE_INT_RGB);
+    void aLargeImageIsScaledDownToTheWorkingSize() {
+        PaintByNumbers.Pixels scaled = PaintByNumbers.working(new int[3200 * 400], 3200, 400, 1600);
 
-        BufferedImage scaled = PaintByNumbers.workingImage(image);
-
-        assertEquals(PaintByNumbers.WORKING_SIZE, scaled.getWidth());
-        assertEquals(200, scaled.getHeight());
+        assertEquals(1600, scaled.w());
+        assertEquals(200, scaled.h());
     }
 
     @Test
-    void scalingAveragesTheSourcePixels() {
-        BufferedImage image = new BufferedImage(3200, 2, BufferedImage.TYPE_INT_RGB);
-        for (int x = 0; x < 3200; x++) {
-            image.setRGB(x, 0, x % 2 == 0 ? 0x000000 : 0xC8C8C8);
-            image.setRGB(x, 1, x % 2 == 0 ? 0x000000 : 0xC8C8C8);
+    void aSmallImageIsScaledUpToTheWorkingSize() {
+        PaintByNumbers.Pixels scaled = PaintByNumbers.working(new int[265 * 376], 265, 376, 2400);
+
+        assertEquals(1691, scaled.w());
+        assertEquals(2400, scaled.h());
+    }
+
+    @Test
+    void scalingDownAveragesTheSourcePixels() {
+        int[] rgb = new int[3200 * 2];
+        for (int i = 0; i < rgb.length; i++) {
+            rgb[i] = i % 2 == 0 ? 0x000000 : 0xC8C8C8;
         }
 
-        int rgb = PaintByNumbers.workingImage(image).getRGB(10, 0) & 0xFFFFFF;
+        assertEquals(0x646464, PaintByNumbers.working(rgb, 3200, 2, 1600).rgb()[10]);
+    }
 
-        assertEquals(0x646464, rgb);
+    @Test
+    void scalingUpRepeatsEachPixelAndMakesNoNewColor() {
+        int[] rgb = {0x000000, 0xC8C8C8};
+
+        PaintByNumbers.Pixels scaled = PaintByNumbers.working(rgb, 2, 1, 4);
+
+        assertEquals(2, scaled.h());
+        int[] row = {0x000000, 0x000000, 0xC8C8C8, 0xC8C8C8};
+        assertArrayEquals(new int[] {row[0], row[1], row[2], row[3], row[0], row[1], row[2], row[3]}, scaled.rgb());
     }
 
     @Test
@@ -77,8 +92,8 @@ class PaintByNumbersTest {
     void aColorCountOutsideTheRangeIsRefused() {
         BufferedImage image = new BufferedImage(10, 10, BufferedImage.TYPE_INT_RGB);
 
-        assertThrows(IllegalArgumentException.class, () -> PaintByNumbers.make(image, 1));
-        assertThrows(IllegalArgumentException.class, () -> PaintByNumbers.make(image, 31));
+        assertThrows(IllegalArgumentException.class, () -> PaintByNumbers.make(image, 1, Detail.MEDIUM));
+        assertThrows(IllegalArgumentException.class, () -> PaintByNumbers.make(image, 51, Detail.MEDIUM));
     }
 
     static BufferedImage blocks(int w, int h, Random random) {

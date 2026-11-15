@@ -12,13 +12,6 @@ import java.util.Map;
  */
 final class Regions {
 
-    static final int MIN_AREA_FLOOR = 64;
-    static final double MIN_AREA_SHARE = 0.0002;
-    static final int SMOOTH_PASSES = 2;
-
-    /** A region narrower than this radius, in pixels, cannot hold a brush stroke and merges, whatever its area. */
-    static final double MIN_RADIUS = 3;
-
     /** {@code region[i]} is the region of pixel i; {@code size} and {@code label} are indexed by region. */
     record Components(int[] region, int count, int[] size, int[] label) {
     }
@@ -26,17 +19,13 @@ final class Regions {
     private Regions() {
     }
 
-    static int minArea(int pixels) {
-        return Math.max(MIN_AREA_FLOOR, (int) Math.round(pixels * MIN_AREA_SHARE));
-    }
-
-    /** Runs the majority filter, and then merges every region below {@code minArea} into a neighbor. */
-    static int[] clean(int[] labels, int w, int h, int minArea) {
+    /** Runs the majority filter, and then merges every region that is too small or too narrow into a neighbor. */
+    static int[] clean(int[] labels, int w, int h, Detail detail) {
         int[] current = labels;
-        for (int pass = 0; pass < SMOOTH_PASSES; pass++) {
+        for (int pass = 0; pass < detail.smoothPasses; pass++) {
             current = smooth(current, w, h);
         }
-        return mergeSmall(current, w, h, minArea);
+        return mergeSmall(current, w, h, detail.minArea(w * h), detail.minRadius);
     }
 
     /** One pass of a 3×3 majority filter. A tie keeps the label of the pixel. */
@@ -183,11 +172,11 @@ final class Regions {
      * round is real and the smallest region always merges. The count of regions then falls in each
      * round, and the loop ends.
      */
-    private static int[] mergeSmall(int[] labels, int w, int h, int minArea) {
+    private static int[] mergeSmall(int[] labels, int w, int h, int minArea, double minRadius) {
         int[] current = labels.clone();
         while (true) {
             Components c = components(current, w, h);
-            Integer[] small = smallRegions(c, radius(c, chamfer(current, w, h)), minArea);
+            Integer[] small = smallRegions(c, radius(c, chamfer(current, w, h)), minArea, minRadius);
             if (small.length == 0 || c.count() == 1) {
                 return current;
             }
@@ -218,9 +207,9 @@ final class Regions {
         }
     }
 
-    private static Integer[] smallRegions(Components c, double[] radius, int minArea) {
+    private static Integer[] smallRegions(Components c, double[] radius, int minArea, double minRadius) {
         return java.util.stream.IntStream.range(0, c.count())
-                .filter(r -> c.size()[r] < minArea || radius[r] < MIN_RADIUS)
+                .filter(r -> c.size()[r] < minArea || radius[r] < minRadius)
                 .boxed()
                 .sorted((a, b) -> c.size()[a] != c.size()[b] ? Integer.compare(c.size()[a], c.size()[b]) : Integer.compare(a, b))
                 .toArray(Integer[]::new);

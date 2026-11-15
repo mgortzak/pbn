@@ -7,11 +7,8 @@ import java.util.List;
 public final class PaintByNumbers {
 
     public static final int MIN_COLORS = 2;
-    public static final int MAX_COLORS = 30;
+    public static final int MAX_COLORS = 50;
     public static final int DEFAULT_COLORS = 16;
-
-    /** The long side of the working image. A phone photo then stays fast and still prints at A4 size. */
-    static final int WORKING_SIZE = 1600;
 
     static final long SEED = 1;
 
@@ -19,37 +16,46 @@ public final class PaintByNumbers {
     public record Result(BufferedImage numbered, BufferedImage legend, BufferedImage preview, List<Swatch> swatches, int regions) {
     }
 
+    /** Packed {@code 0xRRGGBB} pixels, row by row. */
+    record Pixels(int[] rgb, int w, int h) {
+    }
+
     private PaintByNumbers() {
     }
 
-    public static Result make(BufferedImage source, int colors) {
+    public static Result make(BufferedImage source, int colors, Detail detail) {
         if (colors < MIN_COLORS || colors > MAX_COLORS) {
             throw new IllegalArgumentException("colors must be from " + MIN_COLORS + " to " + MAX_COLORS + ", but was " + colors + ".");
         }
-        BufferedImage image = workingImage(source);
-        int w = image.getWidth();
-        int h = image.getHeight();
-        float[] lab = Quantizer.toLab(blur(pixels(image), w, h));
+        Pixels image = working(pixels(source), source.getWidth(), source.getHeight(), detail.workingSize);
+        int w = image.w();
+        int h = image.h();
+        float[] lab = Quantizer.toLab(blur(image.rgb(), w, h));
         int[] labels = Quantizer.assign(lab, Quantizer.fit(lab, colors, SEED));
-        int[] cleaned = Regions.clean(labels, w, h, Regions.minArea(w * h));
+        int[] cleaned = Regions.clean(labels, w, h, detail);
         Palette palette = Palette.of(cleaned, lab);
         List<Labels.Label> labelList = Labels.place(palette.index(), w, h);
         return new Result(Render.numbered(palette.index(), w, h, labelList), Render.legend(palette.swatches()),
                 Render.preview(palette.index(), w, h, palette.swatches()), palette.swatches(), labelList.size());
     }
 
-    /** Scales the image down by area averaging when its long side exceeds the working size. */
-    static BufferedImage workingImage(BufferedImage source) {
-        int sw = source.getWidth();
-        int sh = source.getHeight();
+    /**
+     * Scales the image so that its long side is {@code size}. A small image is scaled up too,
+     * because every limit of {@link Detail} is in pixels of the working image: a small image kept
+     * at its own size loses most of its regions, and its numbers have no space.
+     */
+    static Pixels working(int[] rgb, int sw, int sh, int size) {
         int longSide = Math.max(sw, sh);
-        if (longSide <= WORKING_SIZE) {
-            return source;
+        if (longSide == size) {
+            return new Pixels(rgb, sw, sh);
         }
-        int tw = Math.max(1, (int) Math.round((double) sw * WORKING_SIZE / longSide));
-        int th = Math.max(1, (int) Math.round((double) sh * WORKING_SIZE / longSide));
-        int[] rgb = pixels(source);
-        BufferedImage target = new BufferedImage(tw, th, BufferedImage.TYPE_INT_RGB);
+        int tw = Math.max(1, (int) Math.round((double) sw * size / longSide));
+        int th = Math.max(1, (int) Math.round((double) sh * size / longSide));
+        return longSide > size ? areaAverage(rgb, sw, sh, tw, th) : nearest(rgb, sw, sh, tw, th);
+    }
+
+    private static Pixels areaAverage(int[] rgb, int sw, int sh, int tw, int th) {
+        int[] out = new int[tw * th];
         for (int ty = 0; ty < th; ty++) {
             int y0 = (int) ((long) ty * sh / th);
             int y1 = Math.max(y0 + 1, (int) ((long) (ty + 1) * sh / th));
@@ -68,10 +74,25 @@ public final class PaintByNumbers {
                     }
                 }
                 long n = (long) (y1 - y0) * (x1 - x0);
-                target.setRGB(tx, ty, (int) (r / n) << 16 | (int) (g / n) << 8 | (int) (b / n));
+                out[ty * tw + tx] = (int) (r / n) << 16 | (int) (g / n) << 8 | (int) (b / n);
             }
         }
-        return target;
+        return new Pixels(out, tw, th);
+    }
+
+    /**
+     * Repeats each source pixel. Interpolation would turn each sharp edge into a gradient, and the
+     * steps of that gradient would become false colors and false regions.
+     */
+    private static Pixels nearest(int[] rgb, int sw, int sh, int tw, int th) {
+        int[] out = new int[tw * th];
+        for (int ty = 0; ty < th; ty++) {
+            int sy = (int) ((long) ty * sh / th);
+            for (int tx = 0; tx < tw; tx++) {
+                out[ty * tw + tx] = rgb[sy * sw + (int) ((long) tx * sw / tw)];
+            }
+        }
+        return new Pixels(out, tw, th);
     }
 
     /** The pixels as {@code 0xRRGGBB}, with each transparent part laid over white. */

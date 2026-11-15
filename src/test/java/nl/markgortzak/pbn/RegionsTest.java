@@ -10,12 +10,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class RegionsTest {
 
     @Test
-    void theMinimumAreaHasAFloor() {
-        assertEquals(64, Regions.minArea(100 * 100));
-        assertEquals(384, Regions.minArea(1600 * 1200));
-    }
-
-    @Test
     void componentsCountsEachConnectedArea() {
         int[] labels = {
                 0, 0, 1, 1,
@@ -53,7 +47,7 @@ class RegionsTest {
             }
         }
 
-        int[] cleaned = Regions.clean(labels, w, h, 64);
+        int[] cleaned = Regions.clean(labels, w, h, Detail.MEDIUM);
 
         for (int label : cleaned) {
             assertEquals(0, label);
@@ -69,7 +63,7 @@ class RegionsTest {
             labels[i] = (i % w) < 20 ? 0 : 1;
         }
 
-        int[] cleaned = Regions.clean(labels, w, h, 64);
+        int[] cleaned = Regions.clean(labels, w, h, Detail.MEDIUM);
 
         assertEquals(2, Regions.components(cleaned, w, h).count());
         assertEquals(0, cleaned[0]);
@@ -89,7 +83,7 @@ class RegionsTest {
         // The strip of label 2 has a border of 20 px on each side; this notch makes the right border 21 px.
         labels[12] = 1;
 
-        int[] cleaned = Regions.clean(labels, w, h, 64);
+        int[] cleaned = Regions.clean(labels, w, h, Detail.MEDIUM);
 
         assertEquals(1, cleaned[5 * w + 11]);
     }
@@ -105,12 +99,27 @@ class RegionsTest {
             }
         }
 
-        int[] cleaned = Regions.clean(labels, w, h, 64);
+        int[] cleaned = Regions.clean(labels, w, h, Detail.MEDIUM);
 
         assertEquals(2, Regions.components(cleaned, w, h).count());
         for (int y = 0; y < h; y++) {
             assertTrue(cleaned[y * w + 50] != 2 && cleaned[y * w + 51] != 2, "the strip stays at row " + y);
         }
+    }
+
+    @Test
+    void highDetailKeepsAStripThatMediumDetailMerges() {
+        int w = 100;
+        int h = 100;
+        int[] labels = new int[w * h];
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                labels[y * w + x] = x < 50 ? 0 : x < 54 ? 2 : 1;
+            }
+        }
+
+        assertEquals(2, Regions.components(Regions.clean(labels, w, h, Detail.MEDIUM), w, h).count());
+        assertEquals(3, Regions.components(Regions.clean(labels, w, h, Detail.HIGH), w, h).count());
     }
 
     @Test
@@ -134,7 +143,7 @@ class RegionsTest {
             labels[i] = random.nextInt(6);
         }
 
-        int[] cleaned = Regions.clean(labels, w, h, 64);
+        int[] cleaned = Regions.clean(labels, w, h, Detail.MEDIUM);
 
         Regions.Components components = Regions.components(cleaned, w, h);
         for (int r = 0; r < components.count(); r++) {

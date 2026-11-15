@@ -109,7 +109,7 @@ final class Render {
     }
 
     private static int columns(int n) {
-        return n > ROWS_IN_ONE_COLUMN ? 2 : 1;
+        return Math.max(1, (n + ROWS_IN_ONE_COLUMN - 1) / ROWS_IN_ONE_COLUMN);
     }
 
     private static int rowsInColumn(int n) {
