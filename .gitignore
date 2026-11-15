@@ -3,3 +3,5 @@ target/
 *-legend.png
 *-preview.png
 .idea/
+# The results of the examples are kept on purpose.
+!/src/test/resources/examples/**/*.png
